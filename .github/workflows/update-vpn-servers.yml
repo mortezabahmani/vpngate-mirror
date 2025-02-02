@@ -1,0 +1,48 @@
+name: Update VPN Servers
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'  # Run every 4 hours
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  update-servers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+          
+      - name: Install dependencies
+        run: pip install requests
+          
+      - name: Fetch VPN servers
+        run: |
+          python -c "
+          import requests
+          import json
+          from datetime import datetime
+          
+          headers = {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+          response = requests.get('http://www.vpngate.net/api/iphone/', headers=headers)
+          
+          if response.status_code == 200:
+              with open('vpn_servers.json', 'w') as f:
+                  json.dump({
+                      'last_updated': datetime.now().isoformat(),
+                      'data': response.text
+                  }, f)
+          "
+          
+      - name: Commit and push
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git add vpn_servers.json
+          git commit -m "Update VPN servers $(date -u)" || exit 0
+          git push
