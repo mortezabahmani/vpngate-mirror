@@ -12,11 +12,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v3
-      
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
+          
+      - name: Create initial JSON if not exists
+        run: |
+          if [ ! -f vpn_servers.json ]; then
+            echo '{"last_updated": null, "data": ""}' > vpn_servers.json
+          fi
           
       - name: Install dependencies
         run: pip install requests
@@ -34,33 +42,24 @@ jobs:
               }
               print("Fetching VPN servers...")
               response = requests.get('http://www.vpngate.net/api/iphone/', headers=headers)
+              response.raise_for_status()
               
-              if response.status_code == 200:
-                  print("Successfully fetched data")
-                  with open('vpn_servers.json', 'w') as f:
-                      json.dump({
-                          'last_updated': datetime.now().isoformat(),
-                          'data': response.text
-                      }, f, indent=2)
-                  print("Data saved to vpn_servers.json")
-              else:
-                  print(f"Failed to fetch data: {response.status_code}")
+              with open('vpn_servers.json', 'w') as f:
+                  json.dump({
+                      'last_updated': datetime.now().isoformat(),
+                      'data': response.text
+                  }, f, indent=2)
+              print("Data saved to vpn_servers.json")
                   
           except Exception as e:
               print(f"Error: {str(e)}")
               exit(1)
           EOF
           
-      - name: Commit and push if changed
+      - name: Commit and push
         run: |
-          if [[ -f vpn_servers.json ]]; then
-            git config --global user.name 'GitHub Action'
-            git config --global user.email 'action@github.com'
-            git add vpn_servers.json
-            git diff --quiet && git diff --staged --quiet || git commit -m "Update VPN servers $(date -u)"
-            git push
-            echo "Successfully updated vpn_servers.json"
-          else
-            echo "vpn_servers.json not found!"
-            exit 1
-          fi
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add vpn_servers.json
+          git commit -m "Update VPN servers $(date -u)" || echo "No changes to commit"
+          git push
