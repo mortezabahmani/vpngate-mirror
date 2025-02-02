@@ -10,8 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.8.0
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
           
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -21,37 +24,28 @@ jobs:
       - name: Install dependencies
         run: pip install requests
           
-      - name: Fetch VPN servers
+      - name: Fetch and save VPN servers
         run: |
           python <<EOF
           import requests
           import json
           from datetime import datetime
           
-          try:
-              headers = {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-              }
-              response = requests.get('http://www.vpngate.net/api/iphone/', headers=headers)
-              response.raise_for_status()
-              
-              with open('vpn_servers.json', 'w') as f:
-                  json.dump({
-                      'last_updated': datetime.now().isoformat(),
-                      'data': response.text
-                  }, f, indent=2)
-          except Exception as e:
-              print(f"Error: {str(e)}")
-              exit(1)
-          EOF
+          headers = {'User-Agent': 'Mozilla/5.0'}
+          response = requests.get('http://www.vpngate.net/api/iphone/', headers=headers)
           
-      - name: Configure Git
-        run: |
-          git config --global user.name "Morteza Bahmani"
-          git config --global user.email "morteza.bahmani@gmail.com"
+          with open('vpn_servers.json', 'w') as f:
+              json.dump({
+                  'last_updated': datetime.now().isoformat(),
+                  'data': response.text
+              }, f)
+          EOF
           
       - name: Commit and push
         run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "actions@github.com"
+          git remote set-url origin git@github.com:mortezabahmani/vpngate-mirror.git
           git add vpn_servers.json
-          git commit -m "Update VPN servers" || echo "No changes"
-          git push || (git pull --rebase && git push)
+          git commit -m "Update VPN servers" || true
+          git push
