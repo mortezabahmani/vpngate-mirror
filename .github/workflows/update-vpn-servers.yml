@@ -26,30 +26,32 @@ jobs:
           import requests
           import json
           import os
+          import sys
           from datetime import datetime
           
-          def update_gist():
+          try:
+              # Fetch VPN servers with detailed error handling
+              print("Fetching VPN servers...")
+              vpn_response = requests.get(
+                  "http://www.vpngate.net/api/iphone/",
+                  headers={"User-Agent": "Mozilla/5.0"},
+                  timeout=10
+              )
+              vpn_response.raise_for_status()
+              print("VPN servers fetched successfully")
+              
+              # Prepare Gist update
+              print("Preparing Gist update...")
               headers = {
                   "Authorization": f"Bearer {os.environ[\"GIST_TOKEN\"]}",
                   "Accept": "application/vnd.github.v3+json"
               }
               
-              # Fetch VPN servers
-              vpn_response = requests.get(
-                  "http://www.vpngate.net/api/iphone/",
-                  headers={
-                      "User-Agent": "Mozilla/5.0",
-                      "Accept": "text/html,application/xhtml+xml"
-                  }
-              )
-              
-              # Prepare content
               content = {
                   "last_updated": datetime.now().isoformat(),
                   "data": vpn_response.text
               }
               
-              # Update Gist
               gist_data = {
                   "files": {
                       "vpn_servers.json": {
@@ -58,14 +60,21 @@ jobs:
                   }
               }
               
-              response = requests.patch(
+              # Update Gist
+              print("Updating Gist...")
+              gist_response = requests.patch(
                   f"https://api.github.com/gists/{os.environ[\"GIST_ID\"]}",
                   headers=headers,
                   json=gist_data
               )
               
-              if response.status_code != 200:
-                  raise Exception(f"Failed to update gist: {response.status_code}")
+              if gist_response.status_code != 200:
+                  print(f"Error response: {gist_response.text}")
+                  sys.exit(1)
+                  
+              print("Gist updated successfully")
               
-          update_gist()
+          except Exception as e:
+              print(f"Error: {str(e)}")
+              sys.exit(1)
           '
