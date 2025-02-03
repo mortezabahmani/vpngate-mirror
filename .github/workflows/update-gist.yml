@@ -52,13 +52,16 @@ jobs:
           # Filter and format servers
           servers = []
           for server in reader:
-              operator_info = server.get('Operator', '').upper()
-              print(f"Processing server: {server['IP']}, Operator: {operator_info}")
-              
-              # Check for L2TP/IPsec or SSTP in operator info
-              if any(proto in operator_info for proto in ['L2TP', 'IPSEC', 'SSTP']):
-                  try:
-                      protocol = 'L2TP/IPsec' if any(p in operator_info for p in ['L2TP', 'IPSEC']) else 'MS-SSTP'
+              try:
+                  operator_info = (server.get('Operator') or '').upper()
+                  message_info = (server.get('Message') or '').upper()
+                  print(f"Processing server: {server['IP']}, Operator: {operator_info}")
+                  
+                  # Check for L2TP/IPsec or SSTP in both operator and message
+                  if any(proto in operator_info or proto in message_info 
+                        for proto in ['L2TP', 'IPSEC', 'SSTP']):
+                      protocol = 'L2TP/IPsec' if any(p in operator_info or p in message_info 
+                                                    for p in ['L2TP', 'IPSEC']) else 'MS-SSTP'
                       server_data = {
                           'ip': server['IP'],
                           'country': server['CountryLong'],
@@ -70,8 +73,9 @@ jobs:
                       }
                       servers.append(server_data)
                       print(f"Added {protocol} server: {server_data['ip']}")
-                  except Exception as e:
-                      print(f"Error processing server {server['IP']}: {str(e)}")
+              except Exception as e:
+                  print(f"Error processing server {server.get('IP', 'unknown')}: {str(e)}")
+                  continue
 
           # Sort and save servers
           content = {
