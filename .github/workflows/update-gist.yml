@@ -25,6 +25,7 @@ jobs:
           import requests
           import json
           import csv
+          import base64
           from datetime import datetime, timezone
           from io import StringIO
 
@@ -53,24 +54,27 @@ jobs:
           servers = []
           for server in reader:
               print(f"Processing server: {server['IP']}")
-              message = server.get('Message', '').upper()
-              print(f"Server message: {message}")
-              
-              if 'L2TP' in message or 'SSTP' in message:
-                  try:
+              try:
+                  # Decode base64 config
+                  config = base64.b64decode(server['OpenVPN_ConfigData_Base64']).decode('utf-8', errors='ignore')
+                  print(f"Config contains L2TP: {'L2TP' in config}")
+                  print(f"Config contains SSTP: {'SSTP' in config}")
+                  
+                  # Check for protocol support in config
+                  if 'L2TP' in config or 'SSTP' in config:
                       server_data = {
                           'ip': server['IP'],
                           'country': server['CountryLong'],
                           'ping': float(server.get('Ping', 999)),
-                          'protocol': 'L2TP/IPsec' if 'L2TP' in message else 'MS-SSTP',
+                          'protocol': 'L2TP/IPsec' if 'L2TP' in config else 'MS-SSTP',
                           'uptime': int(server['Uptime']),
                           'speed': int(server['Speed']),
                           'score': int(server['Score'])
                       }
                       servers.append(server_data)
                       print(f"Added server: {server_data}")
-                  except Exception as e:
-                      print(f"Error processing server {server['IP']}: {str(e)}")
+              except Exception as e:
+                  print(f"Error processing server {server['IP']}: {str(e)}")
 
           # Save to file
           content = {
@@ -84,7 +88,7 @@ jobs:
           print(f'VPN data saved successfully. Found {len(servers)} compatible servers')
           if len(servers) == 0:
               print("Warning: No compatible servers found!")
-              print("Sample server data:", lines[2] if len(lines) > 2 else "No data")
+              print("Sample raw data:", lines[2] if len(lines) > 2 else "No data")
           EOF
 
       - name: Update Gist
