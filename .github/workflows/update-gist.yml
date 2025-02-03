@@ -75,8 +75,10 @@ jobs:
               response.raise_for_status()
               
               data = response.json()
-              last_updated = datetime.fromisoformat(data['last_updated'])
-              age = (datetime.now(timezone.utc) - last_updated).total_seconds()
+              # Convert naive datetime to UTC
+              last_updated = datetime.fromisoformat(data['last_updated']).replace(tzinfo=timezone.utc)
+              current_time = datetime.now(timezone.utc)
+              age = (current_time - last_updated).total_seconds()
               
               if age > 300:  # More than 5 minutes old
                   raise ValueError(f"Gist not updated (age: {age:.0f} seconds)")
