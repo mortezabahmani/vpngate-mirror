@@ -25,7 +25,7 @@ jobs:
           import requests
           import json
           import csv
-          from datetime import datetime
+          from datetime import datetime, timezone
           from io import StringIO
 
           # Fetch VPN data
@@ -42,7 +42,7 @@ jobs:
                     'NumVpnSessions', 'Uptime', 'TotalUsers', 'TotalTraffic', 'LogType',
                     'Operator', 'Message', 'OpenVPN_ConfigData_Base64', 'additional']
           
-          print(f"Total servers found: {len(lines) - 2}")  # Debug line
+          print(f"Total servers found: {len(lines) - 2}")
           
           # Skip first 2 lines and take next 15 servers
           csv_data = '\n'.join([','.join(headers)] + lines[2:17])
@@ -52,29 +52,29 @@ jobs:
           # Filter and format servers with debug info
           servers = []
           for server in reader:
-              print(f"Processing server: {server['IP']}")  # Debug line
-              config_data = server.get('OpenVPN_ConfigData_Base64', '')
-              print(f"Protocol info: L2TP={('L2TP' in config_data)}, SSTP={('MS-SSTP' in config_data)}")  # Debug line
+              print(f"Processing server: {server['IP']}")
+              message = server.get('Message', '').upper()
+              print(f"Server message: {message}")
               
-              if 'L2TP' in config_data or 'MS-SSTP' in config_data:
+              if 'L2TP' in message or 'SSTP' in message:
                   try:
                       server_data = {
                           'ip': server['IP'],
                           'country': server['CountryLong'],
                           'ping': float(server.get('Ping', 999)),
-                          'protocol': 'L2TP/IPsec' if 'L2TP' in config_data else 'MS-SSTP',
+                          'protocol': 'L2TP/IPsec' if 'L2TP' in message else 'MS-SSTP',
                           'uptime': int(server['Uptime']),
                           'speed': int(server['Speed']),
                           'score': int(server['Score'])
                       }
                       servers.append(server_data)
-                      print(f"Added server: {server_data}")  # Debug line
+                      print(f"Added server: {server_data}")
                   except Exception as e:
                       print(f"Error processing server {server['IP']}: {str(e)}")
 
           # Save to file
           content = {
-              'last_updated': datetime.utcnow().isoformat(),
+              'last_updated': datetime.now(timezone.utc).isoformat(),
               'servers': sorted(servers, key=lambda x: (x['ping'], -x['score']))
           }
           
