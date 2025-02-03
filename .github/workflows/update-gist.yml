@@ -19,43 +19,55 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Fetch and validate VPN data
-        id: fetch
+      - name: Update VPN Servers Gist
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
           python << 'EOF'
           import requests
           import json
-          import sys
+          import os
           from datetime import datetime
 
-          try:
-              # Fetch VPN data
-              response = requests.get(
-                  'http://www.vpngate.net/api/iphone/',
-                  headers={'User-Agent': 'Mozilla/5.0'},
-                  timeout=10
-              )
-              response.raise_for_status()
-              
-              # Validate response
-              if not response.text or len(response.text.splitlines()) < 3:
-                  raise ValueError("Invalid VPN data received")
-              
-              # Create content
-              content = json.dumps({
-                  'last_updated': datetime.utcnow().isoformat(),
-                  'data': response.text
-              })
-              
-              # Save to file
-              with open('vpn_servers.json', 'w') as f:
-                  f.write(content)
-              
-              print("VPN data fetched and validated successfully")
-              
-          except Exception as e:
-              print(f"Error: {str(e)}")
-              sys.exit(1)
+          def update_gist():
+              try:
+                  # Fetch VPN data
+                  vpn_response = requests.get(
+                      'http://www.vpngate.net/api/iphone/',
+                      headers={'User-Agent': 'Mozilla/5.0'},
+                      timeout=10
+                  )
+                  vpn_response.raise_for_status()
+
+                  # Prepare gist content
+                  content = {
+                      'last_updated': datetime.utcnow().isoformat(),
+                      'data': vpn_response.text
+                  }
+
+                  # Update gist
+                  gist_response = requests.patch(
+                      'https://api.github.com/gists/b3049dbc387bf59cbf6810ae0ee90aff',
+                      headers={
+                          'Authorization': 'Bearer ' + os.environ['GIST_TOKEN'],
+                          'Accept': 'application/vnd.github.v3+json'
+                      },
+                      json={
+                          'files': {
+                              'vpn_servers.json': {
+                                  'content': json.dumps(content)
+                              }
+                          }
+                      }
+                  )
+                  gist_response.raise_for_status()
+                  print('Successfully updated gist')
+
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  raise
+
+          update_gist()
           EOF
 
       - name: Update Gist
