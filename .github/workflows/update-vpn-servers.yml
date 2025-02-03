@@ -1,4 +1,4 @@
-name: Update VPN Servers
+name: Update VPN Servers Gist
 
 on:
   schedule:
@@ -6,40 +6,66 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-servers:
+  update-gist:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.REPO_TOKEN }}
-      
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
           
-      - name: Fetch VPN servers
+      - name: Install dependencies
+        run: pip install requests
+          
+      - name: Update Gist
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: b3049dbc387bf59cbf6810ae0ee90aff
         run: |
           python -c '
           import requests
           import json
+          import os
           from datetime import datetime
           
-          response = requests.get("http://www.vpngate.net/api/iphone/")
-          
-          with open("vpn_servers.json", "w") as f:
-              json.dump({
+          def update_gist():
+              headers = {
+                  "Authorization": f"Bearer {os.environ[\"GIST_TOKEN\"]}",
+                  "Accept": "application/vnd.github.v3+json"
+              }
+              
+              # Fetch VPN servers
+              vpn_response = requests.get(
+                  "http://www.vpngate.net/api/iphone/",
+                  headers={
+                      "User-Agent": "Mozilla/5.0",
+                      "Accept": "text/html,application/xhtml+xml"
+                  }
+              )
+              
+              # Prepare content
+              content = {
                   "last_updated": datetime.now().isoformat(),
-                  "data": response.text
-              }, f)
+                  "data": vpn_response.text
+              }
+              
+              # Update Gist
+              gist_data = {
+                  "files": {
+                      "vpn_servers.json": {
+                          "content": json.dumps(content, indent=2)
+                      }
+                  }
+              }
+              
+              response = requests.patch(
+                  f"https://api.github.com/gists/{os.environ[\"GIST_ID\"]}",
+                  headers=headers,
+                  json=gist_data
+              )
+              
+              if response.status_code != 200:
+                  raise Exception(f"Failed to update gist: {response.status_code}")
+              
+          update_gist()
           '
-          
-      - name: Commit and push
-        env:
-          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add vpn_servers.json
-          git commit -m "Update VPN servers" || exit 0
-          git push
