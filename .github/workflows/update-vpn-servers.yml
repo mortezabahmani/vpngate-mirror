@@ -13,51 +13,89 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
-          
+
       - name: Install dependencies
-        run: pip install requests
-          
-      - name: Update Gist
-        env:
-          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
-          GIST_ID: b3049dbc387bf59cbf6810ae0ee90aff
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Fetch and validate VPN data
+        id: fetch
         run: |
           python << 'EOF'
           import requests
           import json
-          import os
+          import sys
           from datetime import datetime
+
+          try:
+              # Fetch VPN data
+              response = requests.get(
+                  'http://www.vpngate.net/api/iphone/',
+                  headers={'User-Agent': 'Mozilla/5.0'},
+                  timeout=10
+              )
+              response.raise_for_status()
+              
+              # Validate response
+              if not response.text or len(response.text.splitlines()) < 3:
+                  raise ValueError("Invalid VPN data received")
+              
+              # Create content
+              content = json.dumps({
+                  'last_updated': datetime.utcnow().isoformat(),
+                  'data': response.text
+              })
+              
+              # Save to file
+              with open('vpn_servers.json', 'w') as f:
+                  f.write(content)
+              
+              print("VPN data fetched and validated successfully")
+              
+          except Exception as e:
+              print(f"Error: {str(e)}")
+              sys.exit(1)
+          EOF
+
+      - name: Update Gist
+        uses: exuanbo/actions-deploy-gist@v1
+        with:
+          token: ${{ secrets.GIST_TOKEN }}
+          gist_id: b3049dbc387bf59cbf6810ae0ee90aff
+          file_path: vpn_servers.json
+          file_type: json
+
+      - name: Verify Gist update
+        run: |
+          python << 'EOF'
+          import requests
+          import json
+          import sys
+          from datetime import datetime, timezone
           
-          # Fetch VPN servers
-          vpn_response = requests.get(
-              "http://www.vpngate.net/api/iphone/",
-              headers={"User-Agent": "Mozilla/5.0"},
-              timeout=10
-          )
-          vpn_response.raise_for_status()
-          
-          # Update Gist
-          headers = {
-              "Authorization": "Bearer " + os.environ["GIST_TOKEN"],
-              "Accept": "application/vnd.github.v3+json"
-          }
-          
-          data = {
-              "files": {
-                  "vpn_servers.json": {
-                      "content": json.dumps({
-                          "last_updated": datetime.now().isoformat(),
-                          "data": vpn_response.text
-                      })
-                  }
-              }
-          }
-          
-          response = requests.patch(
-              f"https://api.github.com/gists/{os.environ['GIST_ID']}",
-              headers=headers,
-              json=data
-          )
-          response.raise_for_status()
-          print("Gist updated successfully")
+          try:
+              # Wait a few seconds for Gist to update
+              import time
+              time.sleep(5)
+              
+              # Verify Gist content
+              response = requests.get(
+                  'https://gist.githubusercontent.com/mortezabahmani/b3049dbc387bf59cbf6810ae0ee90aff/raw/vpn_servers.json',
+                  timeout=10
+              )
+              response.raise_for_status()
+              
+              data = response.json()
+              last_updated = datetime.fromisoformat(data['last_updated'])
+              age = (datetime.now(timezone.utc) - last_updated).total_seconds()
+              
+              if age > 300:  # More than 5 minutes old
+                  raise ValueError(f"Gist not updated (age: {age:.0f} seconds)")
+                  
+              print("Gist update verified successfully")
+              
+          except Exception as e:
+              print(f"Verification failed: {str(e)}")
+              sys.exit(1)
           EOF
