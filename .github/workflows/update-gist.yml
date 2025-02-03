@@ -42,24 +42,35 @@ jobs:
                     'NumVpnSessions', 'Uptime', 'TotalUsers', 'TotalTraffic', 'LogType',
                     'Operator', 'Message', 'OpenVPN_ConfigData_Base64', 'additional']
           
-          # Skip first 2 lines (header and '*vpn_servers') and take next 15 servers
+          print(f"Total servers found: {len(lines) - 2}")  # Debug line
+          
+          # Skip first 2 lines and take next 15 servers
           csv_data = '\n'.join([','.join(headers)] + lines[2:17])
           csv_file = StringIO(csv_data)
           reader = csv.DictReader(csv_file)
           
-          # Filter and format servers
+          # Filter and format servers with debug info
           servers = []
           for server in reader:
-              if 'L2TP' in server.get('OpenVPN_ConfigData_Base64', '') or 'MS-SSTP' in server.get('OpenVPN_ConfigData_Base64', ''):
-                  servers.append({
-                      'ip': server['IP'],
-                      'country': server['CountryLong'],
-                      'ping': float(server.get('Ping', 999)),
-                      'protocol': 'L2TP/IPsec' if 'L2TP' in server['OpenVPN_ConfigData_Base64'] else 'MS-SSTP',
-                      'uptime': int(server['Uptime']),
-                      'speed': int(server['Speed']),
-                      'score': int(server['Score'])
-                  })
+              print(f"Processing server: {server['IP']}")  # Debug line
+              config_data = server.get('OpenVPN_ConfigData_Base64', '')
+              print(f"Protocol info: L2TP={('L2TP' in config_data)}, SSTP={('MS-SSTP' in config_data)}")  # Debug line
+              
+              if 'L2TP' in config_data or 'MS-SSTP' in config_data:
+                  try:
+                      server_data = {
+                          'ip': server['IP'],
+                          'country': server['CountryLong'],
+                          'ping': float(server.get('Ping', 999)),
+                          'protocol': 'L2TP/IPsec' if 'L2TP' in config_data else 'MS-SSTP',
+                          'uptime': int(server['Uptime']),
+                          'speed': int(server['Speed']),
+                          'score': int(server['Score'])
+                      }
+                      servers.append(server_data)
+                      print(f"Added server: {server_data}")  # Debug line
+                  except Exception as e:
+                      print(f"Error processing server {server['IP']}: {str(e)}")
 
           # Save to file
           content = {
@@ -70,8 +81,10 @@ jobs:
           with open('vpn_servers.json', 'w') as f:
               json.dump(content, f, indent=2)
           
-          print('VPN data saved successfully')
-          print(f'Found {len(servers)} compatible servers')
+          print(f'VPN data saved successfully. Found {len(servers)} compatible servers')
+          if len(servers) == 0:
+              print("Warning: No compatible servers found!")
+              print("Sample server data:", lines[2] if len(lines) > 2 else "No data")
           EOF
 
       - name: Update Gist
