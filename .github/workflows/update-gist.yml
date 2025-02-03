@@ -24,7 +24,9 @@ jobs:
           python << 'EOF'
           import requests
           import json
+          import csv
           from datetime import datetime
+          from io import StringIO
 
           # Fetch VPN data
           response = requests.get(
@@ -34,10 +36,30 @@ jobs:
           )
           response.raise_for_status()
 
+          # Process CSV data
+          csv_lines = response.text.split('\n')[2:17]  # Take first 15 lines after header
+          csv_data = '\n'.join(csv_lines)
+          csv_file = StringIO(csv_data)
+          reader = csv.DictReader(csv_file)
+          
+          # Filter and format servers
+          servers = []
+          for server in reader:
+              if 'L2TP' in server.get('OpenVPN_ConfigData_Base64', '') or 'MS-SSTP' in server.get('OpenVPN_ConfigData_Base64', ''):
+                  servers.append({
+                      'ip': server['IP'],
+                      'country': server['CountryLong'],
+                      'ping': float(server.get('Ping', 999)),
+                      'protocol': 'L2TP/IPsec' if 'L2TP' in server['OpenVPN_ConfigData_Base64'] else 'MS-SSTP',
+                      'uptime': int(server['Uptime']),
+                      'speed': int(server['Speed']),
+                      'score': int(server['Score'])
+                  })
+
           # Save to file
           content = {
               'last_updated': datetime.utcnow().isoformat(),
-              'data': response.text
+              'servers': sorted(servers, key=lambda x: (x['ping'], -x['score']))
           }
           
           with open('vpn_servers.json', 'w') as f:
