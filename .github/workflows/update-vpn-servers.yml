@@ -15,77 +15,49 @@ jobs:
           python-version: '3.12'
           
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
+        run: pip install requests
           
       - name: Update Gist
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           GIST_ID: b3049dbc387bf59cbf6810ae0ee90aff
         run: |
-          python -c '
+          python << 'EOF'
           import requests
           import json
           import os
-          import sys
           from datetime import datetime
           
-          def debug_request(response, operation):
-              print(f"\n=== {operation} ===")
-              print(f"Status Code: {response.status_code}")
-              print(f"Headers: {dict(response.headers)}")
-              print(f"Response: {response.text[:500]}...")
+          # Fetch VPN servers
+          vpn_response = requests.get(
+              "http://www.vpngate.net/api/iphone/",
+              headers={"User-Agent": "Mozilla/5.0"},
+              timeout=10
+          )
+          vpn_response.raise_for_status()
           
-          try:
-              # Test token
-              print(f"\nTesting GitHub token...")
-              test_response = requests.get(
-                  "https://api.github.com/gists",
-                  headers={"Authorization": f"Bearer {os.environ[\"GIST_TOKEN\"]}"}
-              )
-              debug_request(test_response, "Token Test")
-              
-              # Fetch VPN servers
-              print("\nFetching VPN servers...")
-              vpn_response = requests.get(
-                  "http://www.vpngate.net/api/iphone/",
-                  headers={"User-Agent": "Mozilla/5.0"},
-                  timeout=10
-              )
-              debug_request(vpn_response, "VPN Fetch")
-              vpn_response.raise_for_status()
-              
-              # Update Gist
-              print("\nUpdating Gist...")
-              gist_headers = {
-                  "Authorization": f"Bearer {os.environ[\"GIST_TOKEN\"]}",
-                  "Accept": "application/vnd.github.v3+json",
-                  "Content-Type": "application/json"
-              }
-              
-              gist_data = {
-                  "files": {
-                      "vpn_servers.json": {
-                          "content": json.dumps({
-                              "last_updated": datetime.now().isoformat(),
-                              "data": vpn_response.text
-                          }, indent=2)
-                      }
+          # Update Gist
+          headers = {
+              "Authorization": "Bearer " + os.environ["GIST_TOKEN"],
+              "Accept": "application/vnd.github.v3+json"
+          }
+          
+          data = {
+              "files": {
+                  "vpn_servers.json": {
+                      "content": json.dumps({
+                          "last_updated": datetime.now().isoformat(),
+                          "data": vpn_response.text
+                      })
                   }
               }
-              
-              gist_response = requests.patch(
-                  f"https://api.github.com/gists/{os.environ[\"GIST_ID\"]}",
-                  headers=gist_headers,
-                  json=gist_data
-              )
-              debug_request(gist_response, "Gist Update")
-              gist_response.raise_for_status()
-              
-              print("\nOperation completed successfully")
-              
-          except Exception as e:
-              print(f"\nError: {str(e)}")
-              sys.exit(1)
-          '
+          }
+          
+          response = requests.patch(
+              f"https://api.github.com/gists/{os.environ['GIST_ID']}",
+              headers=headers,
+              json=data
+          )
+          response.raise_for_status()
+          print("Gist updated successfully")
+          EOF
