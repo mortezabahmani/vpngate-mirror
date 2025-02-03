@@ -29,45 +29,50 @@ jobs:
           import os
           from datetime import datetime
 
-          def update_gist():
-              try:
-                  # Fetch VPN data
-                  vpn_response = requests.get(
-                      'http://www.vpngate.net/api/iphone/',
-                      headers={'User-Agent': 'Mozilla/5.0'},
-                      timeout=10
-                  )
-                  vpn_response.raise_for_status()
+          try:
+              # Fetch VPN data
+              vpn_response = requests.get(
+                  'http://www.vpngate.net/api/iphone/',
+                  headers={'User-Agent': 'Mozilla/5.0'},
+                  timeout=10
+              )
+              vpn_response.raise_for_status()
 
-                  # Prepare gist content
-                  content = {
-                      'last_updated': datetime.utcnow().isoformat(),
-                      'data': vpn_response.text
-                  }
+              # Prepare gist content
+              content = {
+                  'last_updated': datetime.utcnow().isoformat(),
+                  'data': vpn_response.text
+              }
 
-                  # Update gist
-                  gist_response = requests.patch(
-                      'https://api.github.com/gists/b3049dbc387bf59cbf6810ae0ee90aff',
-                      headers={
+              # Update gist
+              gist_response = requests.patch(
+                  'https://api.github.com/gists/b3049dbc387bf59cbf6810ae0ee90aff',
+                  headers={
                           'Authorization': 'Bearer ' + os.environ['GIST_TOKEN'],
                           'Accept': 'application/vnd.github.v3+json'
-                      },
-                      json={
-                          'files': {
-                              'vpn_servers.json': {
-                                  'content': json.dumps(content)
-                              }
+                  },
+                  json={
+                      'files': {
+                          'vpn_servers.json': {
+                              'content': json.dumps(content)
                           }
                       }
-                  )
-                  gist_response.raise_for_status()
-                  print('Successfully updated gist')
+                  }
+              )
+              gist_response.raise_for_status()
+              print('Successfully updated gist')
 
-              except Exception as e:
-                  print(f'Error: {str(e)}')
-                  raise
+              # Verify update
+              verify_response = requests.get(
+                  'https://gist.githubusercontent.com/mortezabahmani/b3049dbc387bf59cbf6810ae0ee90aff/raw/vpn_servers.json',
+                  timeout=10
+              )
+              verify_response.raise_for_status()
+              print('Verified gist update')
 
-          update_gist()
+          except Exception as e:
+              print(f'Error: {str(e)}')
+              raise
           EOF
 
       - name: Update Gist
