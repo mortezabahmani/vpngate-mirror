@@ -25,7 +25,6 @@ jobs:
           import requests
           import json
           import csv
-          import base64
           from datetime import datetime, timezone
           from io import StringIO
 
@@ -41,42 +40,40 @@ jobs:
           lines = response.text.split('\n')
           headers = ['HostName', 'IP', 'Score', 'Ping', 'Speed', 'CountryLong', 'CountryShort', 
                     'NumVpnSessions', 'Uptime', 'TotalUsers', 'TotalTraffic', 'LogType',
-                    'Operator', 'Message', 'OpenVPN_ConfigData_Base64', 'additional']
+                    'Operator', 'Message', 'OpenVPN_ConfigData_Base64']
           
           print(f"Total servers found: {len(lines) - 2}")
           
-          # Skip first 2 lines and take next 15 servers
-          csv_data = '\n'.join([','.join(headers)] + lines[2:17])
+          # Skip first 2 lines and process all servers
+          csv_data = '\n'.join([','.join(headers)] + lines[2:])
           csv_file = StringIO(csv_data)
           reader = csv.DictReader(csv_file)
           
-          # Filter and format servers with debug info
+          # Filter and format servers
           servers = []
           for server in reader:
-              print(f"Processing server: {server['IP']}")
-              try:
-                  # Decode base64 config
-                  config = base64.b64decode(server['OpenVPN_ConfigData_Base64']).decode('utf-8', errors='ignore')
-                  print(f"Config contains L2TP: {'L2TP' in config}")
-                  print(f"Config contains SSTP: {'SSTP' in config}")
-                  
-                  # Check for protocol support in config
-                  if 'L2TP' in config or 'SSTP' in config:
+              operator_info = server.get('Operator', '').upper()
+              print(f"Processing server: {server['IP']}, Operator: {operator_info}")
+              
+              # Check for L2TP/IPsec or SSTP in operator info
+              if any(proto in operator_info for proto in ['L2TP', 'IPSEC', 'SSTP']):
+                  try:
+                      protocol = 'L2TP/IPsec' if any(p in operator_info for p in ['L2TP', 'IPSEC']) else 'MS-SSTP'
                       server_data = {
                           'ip': server['IP'],
                           'country': server['CountryLong'],
                           'ping': float(server.get('Ping', 999)),
-                          'protocol': 'L2TP/IPsec' if 'L2TP' in config else 'MS-SSTP',
+                          'protocol': protocol,
                           'uptime': int(server['Uptime']),
                           'speed': int(server['Speed']),
                           'score': int(server['Score'])
                       }
                       servers.append(server_data)
-                      print(f"Added server: {server_data}")
-              except Exception as e:
-                  print(f"Error processing server {server['IP']}: {str(e)}")
+                      print(f"Added {protocol} server: {server_data['ip']}")
+                  except Exception as e:
+                      print(f"Error processing server {server['IP']}: {str(e)}")
 
-          # Save to file
+          # Sort and save servers
           content = {
               'last_updated': datetime.now(timezone.utc).isoformat(),
               'servers': sorted(servers, key=lambda x: (x['ping'], -x['score']))
@@ -86,9 +83,6 @@ jobs:
               json.dump(content, f, indent=2)
           
           print(f'VPN data saved successfully. Found {len(servers)} compatible servers')
-          if len(servers) == 0:
-              print("Warning: No compatible servers found!")
-              print("Sample raw data:", lines[2] if len(lines) > 2 else "No data")
           EOF
 
       - name: Update Gist
