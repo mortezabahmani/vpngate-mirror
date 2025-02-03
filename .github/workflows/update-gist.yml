@@ -37,8 +37,13 @@ jobs:
           response.raise_for_status()
 
           # Process CSV data
-          csv_lines = response.text.split('\n')[2:17]  # Take first 15 lines after header
-          csv_data = '\n'.join(csv_lines)
+          lines = response.text.split('\n')
+          headers = ['HostName', 'IP', 'Score', 'Ping', 'Speed', 'CountryLong', 'CountryShort', 
+                    'NumVpnSessions', 'Uptime', 'TotalUsers', 'TotalTraffic', 'LogType',
+                    'Operator', 'Message', 'OpenVPN_ConfigData_Base64', 'additional']
+          
+          # Skip first 2 lines (header and '*vpn_servers') and take next 15 servers
+          csv_data = '\n'.join([','.join(headers)] + lines[2:17])
           csv_file = StringIO(csv_data)
           reader = csv.DictReader(csv_file)
           
@@ -66,6 +71,7 @@ jobs:
               json.dump(content, f, indent=2)
           
           print('VPN data saved successfully')
+          print(f'Found {len(servers)} compatible servers')
           EOF
 
       - name: Update Gist
